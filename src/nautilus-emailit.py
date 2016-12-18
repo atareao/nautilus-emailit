@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# This file is part of nautilus-sendbyemail
+# This file is part of nautilus-emailit
 #
 # Copyright (C) 2016-2017 Lorenzo Carbonell
 # lorenzo.carbonell.cerezo@gmail.com
@@ -36,17 +36,21 @@ from gi.repository import GLib
 from gi.repository import Nautilus as FileManager
 import getpass
 import socket
+import shlex
+import subprocess
 
-SEPARATOR = u'\u2015' * 10
+APPNAME = 'nautilus-emailit'
+ICON = 'nautilus-emailit'
+VERSION = '$VERSION$'
 
 _ = str
 
 
 class EmailItDialog(Gtk.Dialog):
 
-    def __init__(self, email_from=None, email_to=None, subject=None,
+    def __init__(self, window, email_from=None, email_to=None, subject=None,
                  message=None):
-        Gtk.Dialog.__init__(self, 'EmailIt', None, Gtk.DialogFlags.MODAL |
+        Gtk.Dialog.__init__(self, 'EmailIt', window, Gtk.DialogFlags.MODAL |
                             Gtk.DialogFlags.DESTROY_WITH_PARENT,
                             (Gtk.STOCK_CANCEL, Gtk.ResponseType.REJECT,
                              Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT))
@@ -188,15 +192,16 @@ class EmailItMenuProvider(GObject.GObject, FileManager.MenuProvider):
                 return False
         return True
 
-    def emailit(self, menu, selected):
+    def emailit(self, menu, selected, window):
         files = get_files(selected)
         if len(files) > 0:
-            eid = EmailItDialog()
+            eid = EmailItDialog(window)
             if eid.run() == Gtk.ResponseType.ACCEPT:
                 email_to = eid.get_to()
                 email_from = eid.get_from()
                 subject = eid.get_subject()
                 message = eid.get_message()
+                eid.destroy()
                 ans = send_mail(email_to=email_to,
                                 email_from=email_from,
                                 subject=subject,
@@ -210,6 +215,7 @@ class EmailItMenuProvider(GObject.GObject, FileManager.MenuProvider):
                         Gtk.ButtonsType.OK,
                         _('Files were send'))
                     dialog.run()
+                    dialog.destroy()
                 else:
                     dialog = Gtk.MessageDialog(
                         None,
@@ -218,6 +224,9 @@ class EmailItMenuProvider(GObject.GObject, FileManager.MenuProvider):
                         Gtk.ButtonsType.OK,
                         _('Files were NOT send'))
                     dialog.run()
+                    dialog.destroy()
+                return
+            eid.destroy()
 
     def get_file_items(self, window, sel_items):
         """
@@ -226,18 +235,66 @@ class EmailItMenuProvider(GObject.GObject, FileManager.MenuProvider):
         method passing the selected Directory/File
         """
         if self.all_are_files(sel_items):
-            if len(self_items) > 1:
-                label = _('Email them') + '...',
+            if len(sel_items) > 1:
+                label = _('Email them')
             else:
-                label = _('Email it') + '...',
+                label = _('Email it')
+
             top_menuitem = FileManager.MenuItem(
-                name='EmailItMenuProvider::Gtk-email-files',
+                name='EmailItMenuProvider::Gtk-emailit-top',
+                label=label+'...',
+                tip=_('Email files directly'))
+            submenu = FileManager.Menu()
+            top_menuitem.set_submenu(submenu)
+
+            sub_menuitem_00 = FileManager.MenuItem(
+                name='EmailItMenuProvider::Gtk-emailit-sub-01',
                 label=label,
                 tip=_('Email files directly'))
-            top_menuitem.connect('activate', self.emailit, sel_items)
+            sub_menuitem_00.connect('activate',
+                                    self.emailit,
+                                    sel_items,
+                                    window)
+            submenu.append_item(sub_menuitem_00)
+            sub_menuitem_01 = FileManager.MenuItem(
+                name='EmailItMenuProvider::Gtk-emailit-sub-02',
+                label=_('About'),
+                tip=_('About'))
+            sub_menuitem_01.connect('activate', self.about, window)
+            submenu.append_item(sub_menuitem_01)
             #
             return top_menuitem,
         return
+
+    def about(self, widget, window):
+        ad = Gtk.AboutDialog(parent=window)
+        ad.set_name(APPNAME)
+        ad.set_version(VERSION)
+        ad.set_copyright('Copyrignt (c) 2016\nLorenzo Carbonell')
+        ad.set_comments(APPNAME)
+        ad.set_license('''
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <http://www.gnu.org/licenses/>.
+''')
+        ad.set_website('http://www.atareao.es')
+        ad.set_website_label('http://www.atareao.es')
+        ad.set_authors([
+            'Lorenzo Carbonell <lorenzo.carbonell.cerezo@gmail.com>'])
+        ad.set_documenters([
+            'Lorenzo Carbonell <lorenzo.carbonell.cerezo@gmail.com>'])
+        ad.set_icon_name(ICON)
+        ad.set_logo_icon_name(APPNAME)
+        ad.run()
+        ad.destroy()
 
 if __name__ == '__main__':
     eid = EmailItDialog()
